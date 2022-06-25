@@ -1,7 +1,9 @@
 mod cli;
+mod cpu;
 
 use crate::cli::Cli;
 use clap::Parser;
+use cpu::Cpu;
 use std::{fs::File, io::Read};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -11,7 +13,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     file.read_to_end(&mut rom)?;
 
-    println!("{:?}", rom);
+    let cpu = Cpu::new(rom);
+    cpu.run();
 
     Ok(())
 }
