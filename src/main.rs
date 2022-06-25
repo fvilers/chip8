@@ -1,3 +1,10 @@
+use clap::Parser;
+
+#[derive(Parser)]
+struct Cli {
+    rom_path: std::path::PathBuf,
+}
+
 fn main() {
-    println!("Hello, world!");
+    let _args = Cli::parse();
 }
