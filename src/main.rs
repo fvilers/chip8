@@ -1,11 +1,8 @@
-use std::{fs::File, io::Read};
+mod cli;
 
+use crate::cli::Cli;
 use clap::Parser;
-
-#[derive(Parser)]
-struct Cli {
-    rom_path: std::path::PathBuf,
-}
+use std::{fs::File, io::Read};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
