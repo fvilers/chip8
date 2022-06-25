@@ -2,5 +2,12 @@
   "files.exclude": {
     "**/target": true,
     "**/Cargo.lock": true
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "rules": {
+      "*.mutable": {
+        "fontStyle": "" // set to empty string to disable underline, which is the default
+      }
+    }
   }
 }
