@@ -37,10 +37,20 @@ impl Cpu {
         }
     }
 
-    pub fn run(&self) {
+    fn fetch(&mut self) -> u16 {
+        let high = self.ram[self.pc as usize];
+        let low = self.ram[(self.pc + 1) as usize];
+
+        self.pc += 2;
+
+        ((high as u16) << 8) | low as u16
+    }
+
+    pub fn run(&mut self) {
         // An emulator’s main task is simple. It runs in an infinite loop, and does these three tasks in succession
         loop {
             // Fetch the instruction from memory at the current PC
+            let instruction = self.fetch();
 
             // Decode the instruction to find out what the emulator should do
 

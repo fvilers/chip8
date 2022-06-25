@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     file.read_to_end(&mut rom)?;
 
-    let cpu = Cpu::new(rom);
+    let mut cpu = Cpu::new(rom);
     cpu.run();
 
     Ok(())
