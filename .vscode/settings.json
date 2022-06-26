@@ -9,5 +9,6 @@
         "fontStyle": "" // set to empty string to disable underline, which is the default
       }
     }
-  }
+  },
+  "cSpell.words": ["ANNN", "BNNN", "COSMAC", "CXNN", "DXYN"]
 }

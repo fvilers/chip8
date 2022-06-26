@@ -1,9 +1,10 @@
 mod cli;
 mod cpu;
+mod operation;
 
 use crate::cli::Cli;
+use crate::cpu::Cpu;
 use clap::Parser;
-use cpu::Cpu;
 use std::{fs::File, io::Read};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
