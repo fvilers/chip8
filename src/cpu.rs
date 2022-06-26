@@ -1,4 +1,5 @@
 use crate::operation::Operation;
+use rand::random;
 
 pub struct Cpu {
     // CHIP-8 has direct access to up to 4 kilobytes of RAM.
@@ -48,7 +49,7 @@ impl Cpu {
         ((high as u16) << 8) | low as u16
     }
 
-    fn decode(&mut self, instruction: u16) -> Operation {
+    fn decode(&self, instruction: u16) -> Operation {
         // CHIP-8 instructions are divided into broad categories by the first "nibble", or "half-byte", which is the
         // first hexadecimal number. Although every instruction will have a first nibble that tells you what kind of
         // instruction it is, the rest of the nibbles will have different meanings.
@@ -131,7 +132,10 @@ impl Cpu {
             (0x0B, _, _, _) => Operation::JumpToPlusV0 {
                 address: instruction & 0x0FF,
             },
-            (0x0C, _, _, _) => Operation::SetVXToVXAndRandomNumber { x: nibbles.1 },
+            (0x0C, _, _, _) => Operation::SetVXToVXAndRandomNumber {
+                x: nibbles.1,
+                value: (instruction & 0x00FF) as u8,
+            },
             (0x0D, _, _, _) => Operation::DrawSpriteAt {
                 x: nibbles.1,
                 y: nibbles.2,
@@ -164,6 +168,289 @@ impl Cpu {
         }
     }
 
+    fn execute(&mut self, operation: Operation) {
+        match operation {
+            // In the original CHIP-8 interpreters, this would pause execution of the CHIP-8 program and call a
+            // subroutine written in machine language at address NNN instead. This routine would be written in the
+            // machine language of the computer's CPU; on the original COSMAC VIP and the ETI-660, this was 1802
+            // machine code, and on the DREAM 6800, M6800 code. Unless you're making an emulator for either of those
+            // computers, skip this one.
+            Operation::CallMachineCodeRoutineAt { address: _ } => {}
+
+            // Clear the display, turning all pixels off to 0.
+            Operation::ClearScreen => {
+                // TODO:
+                unimplemented!()
+            }
+
+            // Return from a subroutine by removing the last address from the stack.
+            Operation::ReturnFromSubroutine => {
+                self.pc = self.stack.pop().expect("Cannot pop() from an empty stack");
+            }
+
+            // Simply set PC to address, causing the program to jump to that memory location.
+            Operation::JumpTo { address } => {
+                self.pc = address;
+            }
+
+            // Calls the subroutine at memory location.
+            Operation::CallSubroutineAt { address } => {
+                self.stack.push(self.pc);
+                self.pc = address;
+            }
+
+            // Skip one instruction if the value in VX is equal to value.
+            Operation::SkipNextInstructionIfVXEquals { x, value } => {
+                if self.v[x as usize] == value {
+                    self.pc += 2;
+                }
+            }
+
+            // Skip one instruction if the value in VX is not equal to NN.
+            Operation::SkipNextInstructionIfVXNotEquals { x, value } => {
+                if self.v[x as usize] != value {
+                    self.pc += 2;
+                }
+            }
+
+            // Skips if the values in VX and VY are equal.
+            Operation::SkipNextInstructionIfVXEqualsVY { x, y } => {
+                if self.v[x as usize] == self.v[y as usize] {
+                    self.pc += 2;
+                }
+            }
+
+            // Set the register VX to the value NN.
+            Operation::SetVXTo { x, value } => {
+                self.v[x as usize] = value;
+            }
+
+            // Add the value NN to VX.
+            // Note that on most other systems, and even in some of the other CHIP-8 instructions, this would set the
+            // carry flag if the result overflowed 8 bits. For this instruction, this is not the case.
+            Operation::AddToVX { x, value } => {
+                let (result, _overflow) = self.v[x as usize].overflowing_add(value);
+                self.v[x as usize] = result;
+            }
+
+            // VX is set to the value of VY.
+            Operation::SetVXToVY { x, y } => {
+                self.v[x as usize] = self.v[y as usize];
+            }
+
+            // VX is set to the bitwise/binary logical disjunction (OR) of VX and VY.
+            Operation::SetVXToVXOrVY { x, y } => {
+                self.v[x as usize] |= self.v[y as usize];
+            }
+
+            // VX is set to the bitwise/binary logical conjunction (AND) of VX and VY.
+            Operation::SetVXToVXAndVY { x, y } => {
+                self.v[x as usize] &= self.v[y as usize];
+            }
+
+            // VX is set to the bitwise/binary exclusive OR (XOR) of VX and VY.
+            Operation::SetVXToVXXorVY { x, y } => {
+                self.v[x as usize] ^= self.v[y as usize];
+            }
+
+            // VX is set to the value of VX plus the value of VY.
+            Operation::AddVYToVX { x, y } => {
+                // Unlike 7XNN, this addition will affect the carry flag. If the result is larger than 255 (and thus
+                // overflows the 8-bit register VX), the flag register VF is set to 1. If it doesn't overflow, VF is set
+                // to 0.
+                let (result, overflow) = self.v[x as usize].overflowing_add(self.v[y as usize]);
+                self.v[x as usize] = result;
+                self.v[0x0F] = match overflow {
+                    true => 1,
+                    false => 0,
+                };
+            }
+
+            // Sets VX to the result of VX - VY. This subtraction will also affect the carry flag, but note that
+            // it's opposite from what you might think. If the minuend (the first operand) is larger than the subtrahend
+            // (second operand), VF will be set to 1. If the subtrahend is larger, and we "underflow" the result, VF is
+            // set to 0.
+            Operation::SubtractVYFromVX { x, y } => {
+                let (result, overflow) = self.v[x as usize].overflowing_sub(self.v[y as usize]);
+                self.v[x as usize] = result;
+                self.v[0x0F] = match overflow {
+                    true => 0,
+                    false => 1,
+                };
+            }
+
+            // In the CHIP-8 interpreter for the original COSMAC VIP, this instruction did the following: it put
+            // the value of VY into VX, and then shifted the value in VX 1 bit to the right (8XY6) or left (8XYE). VY
+            // was not affected, but the flag register VF would be set to the bit that was shifted out.
+            // However, starting with CHIP-48 and SUPER-CHIP in the early 1990s, these instructions were changed so that
+            // they shifted VX in place, and ignored the Y completely.
+            Operation::RightShiftVX { x } => {
+                // TODO: handle optional behavior for SUPER-CHIP (set VX to the value of VY)
+
+                self.v[0x0F] = self.v[x as usize] & 1;
+                self.v[x as usize] >>= 1;
+            }
+            Operation::LeftShiftVX { x } => {
+                // TODO: handle optional behavior for SUPER-CHIP (set VX to the value of VY)
+
+                self.v[0x0F] = self.v[x as usize] >> 3;
+                self.v[x as usize] <<= 1;
+            }
+
+            // Sets VX to the result of VY - VX. This subtraction will also affect the carry flag the same way than
+            // 8XY5.
+            Operation::SubtractVXFromVY { x, y } => {
+                let (result, overflow) = self.v[y as usize].overflowing_sub(self.v[x as usize]);
+                self.v[x as usize] = result;
+                self.v[0x0F] = match overflow {
+                    true => 0,
+                    false => 1,
+                };
+            }
+
+            // Skips if the values in VX and VY are not equal.
+            Operation::SkipNextInstructionIfVXNotEqualsVY { x, y } => {
+                if self.v[x as usize] != self.v[y as usize] {
+                    self.pc = self.pc + 2;
+                }
+            }
+
+            // This sets the index register I to the value address.
+            Operation::SetITo { address } => {
+                self.i = address;
+            }
+
+            // In the original COSMAC VIP interpreter, this instruction jumped to the address NNN plus the value
+            // in the register V0. This was mainly used for "jump tables", to quickly be able to jump to different
+            // subroutines based on some input.
+            // Starting with CHIP-48 and SUPER-CHIP, it was (probably unintentionally) changed to work as BXNN: It will
+            // jump to the address XNN, plus the value in the register VX. So the instruction B220 will jump to address
+            // 220 plus the value in the register V2.
+            Operation::JumpToPlusV0 { address } => {
+                // TODO: handle quirk mode for SUPER-CHIP
+
+                self.pc = address + self.v[0] as u16;
+            }
+
+            // This instruction generates a random number, binary ANDs it with the value NN, and puts the result in VX.
+            Operation::SetVXToVXAndRandomNumber { x, value } => {
+                let random: u8 = random();
+                self.v[x as usize] = random & value;
+            }
+
+            // Draw an N pixels tall sprite from the memory location that the I index register is holding to the screen,
+            // at the horizontal X coordinate in VX and the Y coordinate in VY.
+            Operation::DrawSpriteAt {
+                x: _,
+                y: _,
+                height: _,
+            } => {
+                // TODO:
+                unimplemented!()
+            }
+
+            // Skip the following instruction based on a condition. These skip based on whether the player is currently
+            // pressing a key or not.
+            Operation::SkipNextInstructionIfKeyInVXPressed { x: _ } => {
+                // TODO:
+                unimplemented!()
+            }
+            Operation::SkipNextInstructionIfKeyInVXNotPressed { x: _ } => {
+                // TODO:
+                unimplemented!()
+            }
+
+            // Sets VX to the current value of the delay timer.
+            Operation::SetVXToDelayTimer { x: _ } => {
+                //TODO:
+                unimplemented!()
+            }
+
+            // This instruction "blocks"; it stops executing instructions and waits for key input (or loops forever,
+            // unless a key is pressed).
+            // As we increment PC after fetching each instruction, then it should be decremented again here unless a key
+            // is pressed. Otherwise, PC should simply not be incremented.
+            // Although this instruction stops the program from executing further instructions, the timers (delay timer
+            // and sound timer) should still be decreased while it’s waiting.
+            // If a key is pressed while this instruction is waiting for input, its hexadecimal value will be put in VX
+            // and execution continues.
+            Operation::AwaitKeyPress { x: _ } => {
+                //TODO:
+                unimplemented!()
+            }
+
+            // Sets the delay timer to the value in VX.
+            Operation::SetDelayTimerToVX { x: _ } => {
+                //TODO:
+                unimplemented!()
+            }
+
+            // Sets the sound timer to the value in VX.
+            Operation::SetSoundTimerToVX { x: _ } => {
+                // TODO:
+                unimplemented!()
+            }
+
+            // The index register I will get the value in VX added to it.
+            // Unlike other arithmetic instructions, this did not affect VF on overflow on the original COSMAC VIP.
+            // However, it seems that some interpreters set VF to 1 if I “overflows” from 0FFF to above 1000 (outside
+            // the normal addressing range). This wasn’t the case on the original COSMAC VIP, at least, but apparently
+            // the CHIP-8 interpreter for Amiga behaved this way. At least one known game, Spacefight 2091!, relies on
+            // this behavior.
+            Operation::AddVXToI { x } => {
+                // TODO: see comment above if we want to support that case
+                self.i += self.v[x as usize] as u16;
+            }
+
+            // The index register I is set to the address of the hexadecimal character in VX. An 8-bit register can hold
+            // two hexadecimal numbers, but this would only point to one character. The original COSMAC VIP
+            // interpreter just took the last nibble of VX and used that as the character.
+            Operation::SetIToSpriteLocationForCharacterInVX { x: _ } => {
+                //TODO:
+                unimplemented!()
+            }
+
+            // It takes the number in VX (which is one byte, so it can be any number from 0 to 255) and converts it to
+            // three decimal digits, storing these digits in memory at the address in the index register I.
+            Operation::StoreBinaryCodedDecimalOfVX { x } => {
+                let n = self.v[x as usize];
+                let i = self.i as usize;
+
+                self.ram[i] = n / 100;
+                self.ram[i + 1] = (n % 100) / 10;
+                self.ram[i + 2] = n % 10;
+            }
+
+            // The value of each variable register from V0 to VX inclusive (if X is 0, then only V0) will be stored in
+            // successive memory addresses, starting with the one that’s stored in I.
+            // The original CHIP-8 interpreter for the COSMAC VIP actually incremented the I register while it worked.
+            // Each time it stored or loaded one register, it incremented I. After the instruction was finished, I would
+            // be set to the new value I + X + 1.
+            // However, modern interpreters (starting with CHIP48 and SUPER-CHIP in the early 90s) used a temporary
+            // variable for indexing, so when the instruction was finished, I would still hold the same value as it did
+            // before.
+            Operation::StoreFromV0ToVX { x } => {
+                // TODO: handle optional behavior for SUPER-CHIP
+
+                for n in 0..=x as usize {
+                    self.ram[n] = self.v[n];
+                }
+
+                self.i += 1 + x as u16;
+            }
+
+            // Does the same thing than FX55, except that it takes the value stored at the memory addresses and loads
+            // them into the variable registers instead.
+            Operation::FillFromV0ToVX { x } => {
+                for n in 0..=x as usize {
+                    self.v[n] = self.ram[n];
+                }
+
+                self.i += 1 + x as u16;
+            }
+        }
+    }
+
     pub fn run(&mut self) {
         // An emulator's main task is simple. It runs in an infinite loop, and does these three tasks in succession.
         loop {
@@ -174,6 +461,7 @@ impl Cpu {
             let operation = self.decode(instruction);
 
             // Execute the instruction and do what it tells you.
+            self.execute(operation);
         }
     }
 }

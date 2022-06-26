@@ -66,7 +66,7 @@ pub enum Operation {
     JumpToPlusV0 { address: u16 },
 
     // CXNN
-    SetVXToVXAndRandomNumber { x: u8 },
+    SetVXToVXAndRandomNumber { x: u8, value: u8 },
 
     // DXYN
     DrawSpriteAt { x: u8, y: u8, height: u8 },
