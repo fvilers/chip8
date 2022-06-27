@@ -1,9 +1,12 @@
 use crate::operation::Operation;
 use rand::random;
 
+// The memory should be 4 kB (4 kilobytes, ie. 4096 bytes) large.
+const RAM_SIZE: u16 = 0x1000;
+
 pub struct Cpu {
     // CHIP-8 has direct access to up to 4 kilobytes of RAM.
-    ram: [u8; 0x1000],
+    ram: [u8; RAM_SIZE],
 
     // A program counter which points at the current instruction in memory.
     pc: u16,
@@ -21,9 +24,11 @@ pub struct Cpu {
 
 impl Cpu {
     pub fn new(rom: Vec<u8>) -> Cpu {
-        // TODO: ensure rom size is not larger than ram size
+        if rom.len() > RAM_SIZE as usize {
+            panic!("ROM size cannot be larger than {} bytes", RAM_SIZE);
+        }
 
-        let mut ram = [0x00; 0x1000];
+        let mut ram = [0x00; RAM_SIZE as usize];
         let mut i = 0x200;
 
         for byte in rom {
