@@ -31,6 +31,9 @@ pub struct Cpu {
     // A stack which is used to call subroutines/functions and return from them.
     stack: Vec<u16>,
 
+    // An 8-bit delay timer which is decremented at a rate of 60 Hz (60 times per second) until it reaches 0
+    delay_timer: u8,
+
     // 16 8-bit (one byte) general-purpose variable registers numbered 0 through F hexadecimal. VF is also used as a
     // flag register; many instructions will set it to either 1 or 0 based on some rule.
     v: [u8; 16],
@@ -71,10 +74,12 @@ impl Cpu {
             pc: ROM_ADDRESS,
             i: 0x00,
             stack: Vec::with_capacity(STACK_SIZE),
+            delay_timer: 0x00,
             v: [0x00; 16],
             vram: [0x00; VRAM_SIZE],
             vram_changed: false,
             super_chip,
+            key_held: Option::None,
         }
     }
 
@@ -444,19 +449,22 @@ impl Cpu {
 
             // Skip the following instruction based on a condition. These skip based on whether the player is currently
             // pressing a key or not.
-            Operation::SkipNextInstructionIfKeyInVXPressed { x: _ } => {
-                // TODO:
-                unimplemented!()
+            Operation::SkipNextInstructionIfKeyInVXPressed { x } => {
+                self.pc += match self.key_held {
+                    Some(key) if key == self.v[x as usize] => 2,
+                    _ => 0,
+                }
             }
-            Operation::SkipNextInstructionIfKeyInVXNotPressed { x: _ } => {
-                // TODO:
-                unimplemented!()
+            Operation::SkipNextInstructionIfKeyInVXNotPressed { x } => {
+                self.pc += match self.key_held {
+                    Some(key) if key == self.v[x as usize] => 0,
+                    _ => 2,
+                }
             }
 
             // Sets VX to the current value of the delay timer.
-            Operation::SetVXToDelayTimer { x: _ } => {
-                //TODO:
-                unimplemented!()
+            Operation::SetVXToDelayTimer { x } => {
+                self.v[x as usize] = self.delay_timer;
             }
 
             // This instruction "blocks"; it stops executing instructions and waits for key input (or loops forever,
@@ -478,9 +486,8 @@ impl Cpu {
             }
 
             // Sets the delay timer to the value in VX.
-            Operation::SetDelayTimerToVX { x: _ } => {
-                //TODO:
-                unimplemented!()
+            Operation::SetDelayTimerToVX { x } => {
+                self.delay_timer = self.v[x as usize];
             }
 
             // Sets the sound timer to the value in VX.
@@ -571,6 +578,11 @@ impl Cpu {
 
         // Execute the instruction and do what it tells you.
         self.execute(operation);
+
+        // Handle timers
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
 
         // Let the CPU consumer know if VRAM has changed.
         self.vram_changed
