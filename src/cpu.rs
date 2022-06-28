@@ -332,7 +332,7 @@ impl Cpu {
             Operation::LeftShiftVX { x } => {
                 // TODO: handle optional behavior for SUPER-CHIP (set VX to the value of VY)
 
-                self.v[0x0F] = self.v[x as usize] >> 3;
+                self.v[0x0F] = (self.v[x as usize] & 0x80) >> 7;
                 self.v[x as usize] <<= 1;
             }
 
