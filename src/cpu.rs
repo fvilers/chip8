@@ -472,9 +472,9 @@ impl Cpu {
             // The index register I is set to the address of the hexadecimal character in VX. An 8-bit register can hold
             // two hexadecimal numbers, but this would only point to one character. The original COSMAC VIP
             // interpreter just took the last nibble of VX and used that as the character.
-            Operation::SetIToSpriteLocationForCharacterInVX { x: _ } => {
-                //TODO:
-                unimplemented!()
+            Operation::SetIToSpriteLocationForCharacterInVX { x } => {
+                let offset = self.v[x as usize] * 5;
+                self.i = FONT_ADDRESS + offset as u16;
             }
 
             // It takes the number in VX (which is one byte, so it can be any number from 0 to 255) and converts it to
