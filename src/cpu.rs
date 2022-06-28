@@ -462,7 +462,7 @@ impl Cpu {
 
             // The index register I will get the value in VX added to it.
             // Unlike other arithmetic instructions, this did not affect VF on overflow on the original COSMAC VIP.
-            // However, it seems that some interpreters set VF to 1 if I “overflows” from 0FFF to above 1000 (outside
+            // However, it seems that some interpreters set VF to 1 if I "overflows" from 0FFF to above 1000 (outside
             // the normal addressing range). This wasn't the case on the original COSMAC VIP, at least, but apparently
             // the CHIP-8 interpreter for Amiga behaved this way. At least one known game, Spacefight 2091!, relies on
             // this behavior.
@@ -501,21 +501,21 @@ impl Cpu {
             Operation::StoreFromV0ToVX { x } => {
                 // TODO: handle optional behavior for SUPER-CHIP
 
-                for n in 0..=x as usize {
-                    self.ram[n] = self.v[n];
+                for i in 0..=x {
+                    self.ram[self.i as usize] = self.v[i as usize];
+                    self.i += 1;
                 }
-
-                self.i += 1 + x as u16;
             }
 
             // Does the same thing than FX55, except that it takes the value stored at the memory addresses and loads
             // them into the variable registers instead.
             Operation::FillFromV0ToVX { x } => {
-                for n in 0..=x as usize {
-                    self.v[n] = self.ram[n];
-                }
+                // TODO: handle optional behavior for SUPER-CHIP
 
-                self.i += 1 + x as u16;
+                for i in 0..=x {
+                    self.v[i as usize] = self.ram[self.i as usize];
+                    self.i += 1;
+                }
             }
         }
     }
