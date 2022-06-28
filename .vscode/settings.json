@@ -17,6 +17,8 @@
     "COSMAC",
     "CXNN",
     "DXYN",
-    "Spacefight"
+    "Spacefight",
+    "vram",
+    "winit"
   ]
 }

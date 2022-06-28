@@ -1,12 +1,13 @@
-use crate::operation::Operation;
+use crate::{operation::Operation, SCREEN_HEIGHT, SCREEN_WIDTH};
 use rand::random;
 
 // The memory should be 4 kB (4 kilobytes, ie. 4096 bytes) large.
 const RAM_SIZE: u16 = 0x1000;
+const VRAM_SIZE: u16 = SCREEN_WIDTH as u16 * SCREEN_HEIGHT as u16;
 
 pub struct Cpu {
     // CHIP-8 has direct access to up to 4 kilobytes of RAM.
-    ram: [u8; RAM_SIZE],
+    ram: [u8; RAM_SIZE as usize],
 
     // A program counter which points at the current instruction in memory.
     pc: u16,
@@ -20,6 +21,9 @@ pub struct Cpu {
     // 16 8-bit (one byte) general-purpose variable registers numbered 0 through F hexadecimal. VF is also used as a
     // flag register; many instructions will set it to either 1 or 0 based on some rule.
     v: [u8; 16],
+
+    vram: [u8; VRAM_SIZE as usize],
+    vram_changed: bool,
 }
 
 impl Cpu {
@@ -42,6 +46,8 @@ impl Cpu {
             i: 0x00,
             stack: Vec::new(),
             v: [0x00; 16],
+            vram: [0x00; VRAM_SIZE as usize],
+            vram_changed: false,
         }
     }
 
@@ -184,8 +190,11 @@ impl Cpu {
 
             // Clear the display, turning all pixels off to 0.
             Operation::ClearScreen => {
-                // TODO:
-                unimplemented!()
+                for i in 0..self.vram.len() {
+                    self.vram[i] = 0;
+                }
+
+                self.vram_changed = true;
             }
 
             // Return from a subroutine by removing the last address from the stack.
@@ -345,13 +354,41 @@ impl Cpu {
 
             // Draw an N pixels tall sprite from the memory location that the I index register is holding to the screen,
             // at the horizontal X coordinate in VX and the Y coordinate in VY.
-            Operation::DrawSpriteAt {
-                x: _,
-                y: _,
-                height: _,
-            } => {
-                // TODO:
-                unimplemented!()
+            Operation::DrawSpriteAt { x, y, height } => {
+                let mut y = self.v[y as usize] % SCREEN_HEIGHT;
+
+                self.v[0x0F] = 0;
+
+                for row in 0..height {
+                    // The starting position of the sprite will wrap. In other words, an X coordinate of 5 is the same
+                    //  as an X of 68 (since the screen is 64 pixels wide)
+                    let mut x = self.v[x as usize] % SCREEN_WIDTH;
+                    let address = self.i + row as u16;
+                    let sprite_row = self.ram[address as usize];
+
+                    for bit in 0..8 {
+                        let pixel = (sprite_row >> (7 - bit)) & 1;
+                        let screen_position = (y as u16 * SCREEN_HEIGHT as u16) + x as u16;
+
+                        // If the current pixel in the sprite row is on and the pixel at coordinates X,Y on the screen
+                        // is also on, turn off the pixel and set VF to 1. Or if the current pixel in the sprite row is
+                        // on and the screen pixel is not, draw the pixel at the X and Y coordinates.
+                        self.v[0x0f] |= pixel & self.vram[screen_position as usize];
+                        self.vram[screen_position as usize] ^= pixel;
+
+                        if x == SCREEN_WIDTH - 1 {
+                            break;
+                        }
+                        x += 1;
+                    }
+
+                    if y == SCREEN_HEIGHT - 1 {
+                        break;
+                    }
+                    y += 1;
+                }
+
+                self.vram_changed = true;
             }
 
             // Skip the following instruction based on a condition. These skip based on whether the player is currently
@@ -376,7 +413,7 @@ impl Cpu {
             // As we increment PC after fetching each instruction, then it should be decremented again here unless a key
             // is pressed. Otherwise, PC should simply not be incremented.
             // Although this instruction stops the program from executing further instructions, the timers (delay timer
-            // and sound timer) should still be decreased while it’s waiting.
+            // and sound timer) should still be decreased while it's waiting.
             // If a key is pressed while this instruction is waiting for input, its hexadecimal value will be put in VX
             // and execution continues.
             Operation::AwaitKeyPress { x: _ } => {
@@ -399,7 +436,7 @@ impl Cpu {
             // The index register I will get the value in VX added to it.
             // Unlike other arithmetic instructions, this did not affect VF on overflow on the original COSMAC VIP.
             // However, it seems that some interpreters set VF to 1 if I “overflows” from 0FFF to above 1000 (outside
-            // the normal addressing range). This wasn’t the case on the original COSMAC VIP, at least, but apparently
+            // the normal addressing range). This wasn't the case on the original COSMAC VIP, at least, but apparently
             // the CHIP-8 interpreter for Amiga behaved this way. At least one known game, Spacefight 2091!, relies on
             // this behavior.
             Operation::AddVXToI { x } => {
@@ -427,7 +464,7 @@ impl Cpu {
             }
 
             // The value of each variable register from V0 to VX inclusive (if X is 0, then only V0) will be stored in
-            // successive memory addresses, starting with the one that’s stored in I.
+            // successive memory addresses, starting with the one that's stored in I.
             // The original CHIP-8 interpreter for the COSMAC VIP actually incremented the I register while it worked.
             // Each time it stored or loaded one register, it incremented I. After the instruction was finished, I would
             // be set to the new value I + X + 1.
@@ -456,18 +493,35 @@ impl Cpu {
         }
     }
 
-    pub fn run(&mut self) {
-        // An emulator's main task is simple. It runs in an infinite loop, and does these three tasks in succession.
-        loop {
-            // Fetch the instruction from memory at the current PC.
-            let instruction = self.fetch();
+    // An emulator's main task is simple. It runs in an infinite loop, and does these three tasks in succession.
+    pub fn tick(&mut self) -> bool {
+        // Fetch the instruction from memory at the current PC.
+        let instruction = self.fetch();
 
-            // Decode the instruction to find out what the emulator should do.
-            let operation = self.decode(instruction);
+        // Decode the instruction to find out what the emulator should do.
+        let operation = self.decode(instruction);
 
-            // Execute the instruction and do what it tells you.
-            self.execute(operation);
+        // Execute the instruction and do what it tells you.
+        self.execute(operation);
+
+        // Let the CPU consumer know if VRAM has changed.
+        self.vram_changed
+    }
+
+    pub fn draw(&mut self, screen: &mut [u8]) {
+        for (p, pixel) in self.vram.iter().zip(screen.chunks_exact_mut(4)) {
+            let color = match p {
+                0 => 0x00,
+                1 => 0xFF,
+                _ => panic!("Invalid pixel value"),
+            };
+            pixel[0] = color; // Red
+            pixel[1] = color; // Green
+            pixel[2] = color; // Blue
+            pixel[3] = 0xFF; // Alpha channel
         }
+
+        self.vram_changed = false;
     }
 }
 
