@@ -10,10 +10,11 @@ use pixels::{Pixels, SurfaceTexture};
 use std::{fs::File, io::Read};
 use winit::{
     dpi::LogicalSize,
-    event::{Event, WindowEvent},
+    event::{Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
+use winit_input_helper::WinitInputHelper;
 
 // The display is 64 pixels wide and 32 pixels tall.
 // TODO: or 128 x 64 for SUPER-CHIP.
@@ -31,6 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_name = args.rom_path.file_name().unwrap().to_str().unwrap();
 
     let event_loop = EventLoop::new();
+    let mut input = WinitInputHelper::new();
     let window = {
         let size = LogicalSize::new(SCREEN_WIDTH, SCREEN_HEIGHT);
 
@@ -67,6 +69,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if cpu.tick() {
                     window.request_redraw();
                 }
+            }
+        }
+
+        if input.update(&event) {
+            if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
+                *control_flow = ControlFlow::Exit;
+                return;
             }
         }
     });
