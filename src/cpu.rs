@@ -37,10 +37,13 @@ pub struct Cpu {
 
     vram: [u8; VRAM_SIZE],
     vram_changed: bool,
+
+    // Flag set to `true` if the SUPER-CHIP behavior is enabled
+    super_chip: bool,
 }
 
 impl Cpu {
-    pub fn new(rom: Vec<u8>) -> Cpu {
+    pub fn new(rom: Vec<u8>, super_chip: bool) -> Cpu {
         if rom.len() > RAM_SIZE {
             panic!("ROM size cannot be larger than {} bytes", RAM_SIZE);
         }
@@ -69,6 +72,7 @@ impl Cpu {
             v: [0x00; 16],
             vram: [0x00; VRAM_SIZE],
             vram_changed: false,
+            super_chip,
         }
     }
 
@@ -148,12 +152,18 @@ impl Cpu {
                 x: nibbles.1,
                 y: nibbles.2,
             },
-            (0x08, _, _, 0x06) => Operation::RightShiftVX { x: nibbles.1 },
+            (0x08, _, _, 0x06) => Operation::RightShiftVX {
+                x: nibbles.1,
+                y: nibbles.2,
+            },
             (0x08, _, _, 0x07) => Operation::SubtractVXFromVY {
                 x: nibbles.1,
                 y: nibbles.2,
             },
-            (0x08, _, _, 0x0e) => Operation::LeftShiftVX { x: nibbles.1 },
+            (0x08, _, _, 0x0e) => Operation::LeftShiftVX {
+                x: nibbles.1,
+                y: nibbles.2,
+            },
             (0x09, _, _, 0x00) => Operation::SkipNextInstructionIfVXNotEqualsVY {
                 x: nibbles.1,
                 y: nibbles.2,
@@ -161,8 +171,14 @@ impl Cpu {
             (0x0A, _, _, _) => Operation::SetITo {
                 address: instruction & 0x0FFF,
             },
-            (0x0B, _, _, _) => Operation::JumpToPlusV0 {
-                address: instruction & 0x0FFF,
+            (0x0B, _, _, _) => match self.super_chip {
+                false => Operation::JumpToPlusV0 {
+                    address: instruction & 0x0FFF,
+                },
+                true => Operation::JumpToPlusVX {
+                    x: nibbles.1,
+                    address: instruction & 0x0FFF,
+                },
             },
             (0x0C, _, _, _) => Operation::SetVXToVXAndRandomNumber {
                 x: nibbles.1,
@@ -323,14 +339,18 @@ impl Cpu {
             // was not affected, but the flag register VF would be set to the bit that was shifted out.
             // However, starting with CHIP-48 and SUPER-CHIP in the early 1990s, these instructions were changed so that
             // they shifted VX in place, and ignored the Y completely.
-            Operation::RightShiftVX { x } => {
-                // TODO: handle optional behavior for SUPER-CHIP (set VX to the value of VY)
+            Operation::RightShiftVX { x, y } => {
+                if !self.super_chip {
+                    self.v[x as usize] = self.v[y as usize];
+                }
 
                 self.v[0x0F] = self.v[x as usize] & 1;
                 self.v[x as usize] >>= 1;
             }
-            Operation::LeftShiftVX { x } => {
-                // TODO: handle optional behavior for SUPER-CHIP (set VX to the value of VY)
+            Operation::LeftShiftVX { x, y } => {
+                if !self.super_chip {
+                    self.v[x as usize] = self.v[y as usize];
+                }
 
                 self.v[0x0F] = (self.v[x as usize] & 0x80) >> 7;
                 self.v[x as usize] <<= 1;
@@ -366,9 +386,11 @@ impl Cpu {
             // jump to the address XNN, plus the value in the register VX. So the instruction B220 will jump to address
             // 220 plus the value in the register V2.
             Operation::JumpToPlusV0 { address } => {
-                // TODO: handle quirk mode for SUPER-CHIP
-
                 self.pc = address + self.v[0] as u16;
+            }
+
+            Operation::JumpToPlusVX { x, address } => {
+                self.pc = address + self.v[x as usize] as u16;
             }
 
             // This instruction generates a random number, binary ANDs it with the value NN, and puts the result in VX.
@@ -498,25 +520,37 @@ impl Cpu {
             // However, modern interpreters (starting with CHIP48 and SUPER-CHIP in the early 90s) used a temporary
             // variable for indexing, so when the instruction was finished, I would still hold the same value as it did
             // before.
-            Operation::StoreFromV0ToVX { x } => {
-                // TODO: handle optional behavior for SUPER-CHIP
-
-                for i in 0..=x {
-                    self.ram[self.i as usize] = self.v[i as usize];
-                    self.i += 1;
+            Operation::StoreFromV0ToVX { x } => match self.super_chip {
+                false => {
+                    for i in 0..=x {
+                        self.ram[self.i as usize] = self.v[i as usize];
+                        self.i += 1;
+                    }
                 }
-            }
+                true => {
+                    for i in 0..=x {
+                        let address = self.i + i as u16;
+                        self.ram[address as usize] = self.v[i as usize];
+                    }
+                }
+            },
 
             // Does the same thing than FX55, except that it takes the value stored at the memory addresses and loads
             // them into the variable registers instead.
-            Operation::FillFromV0ToVX { x } => {
-                // TODO: handle optional behavior for SUPER-CHIP
-
-                for i in 0..=x {
-                    self.v[i as usize] = self.ram[self.i as usize];
-                    self.i += 1;
+            Operation::FillFromV0ToVX { x } => match self.super_chip {
+                false => {
+                    for i in 0..=x {
+                        self.v[i as usize] = self.ram[self.i as usize];
+                        self.i += 1;
+                    }
                 }
-            }
+                true => {
+                    for i in 0..=x {
+                        let address = self.i + i as u16;
+                        self.v[i as usize] = self.ram[address as usize];
+                    }
+                }
+            },
         }
     }
 

@@ -16,6 +16,7 @@ use winit::{
 };
 
 // The display is 64 pixels wide and 32 pixels tall.
+// TODO: or 128 x 64 for SUPER-CHIP.
 pub const SCREEN_WIDTH: u8 = 64;
 pub const SCREEN_HEIGHT: u8 = 32;
 
@@ -26,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     file.read_to_end(&mut rom)?;
 
-    let mut cpu = Cpu::new(rom);
+    let mut cpu = Cpu::new(rom, args.super_chip);
     let file_name = args.rom_path.file_name().unwrap().to_str().unwrap();
 
     let event_loop = EventLoop::new();

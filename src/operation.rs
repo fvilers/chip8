@@ -48,13 +48,13 @@ pub enum Operation {
     SubtractVYFromVX { x: u8, y: u8 },
 
     // 8XY6
-    RightShiftVX { x: u8 },
+    RightShiftVX { x: u8, y: u8 },
 
     // 8XY7
     SubtractVXFromVY { x: u8, y: u8 },
 
     // 8XYE
-    LeftShiftVX { x: u8 },
+    LeftShiftVX { x: u8, y: u8 },
 
     // 9XY0
     SkipNextInstructionIfVXNotEqualsVY { x: u8, y: u8 },
@@ -64,6 +64,9 @@ pub enum Operation {
 
     // BNNN
     JumpToPlusV0 { address: u16 },
+
+    // BXNN
+    JumpToPlusVX { x: u8, address: u16 },
 
     // CXNN
     SetVXToVXAndRandomNumber { x: u8, value: u8 },
