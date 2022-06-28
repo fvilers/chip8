@@ -467,9 +467,14 @@ impl Cpu {
             // and sound timer) should still be decreased while it's waiting.
             // If a key is pressed while this instruction is waiting for input, its hexadecimal value will be put in VX
             // and execution continues.
-            Operation::AwaitKeyPress { x: _ } => {
-                //TODO:
-                unimplemented!()
+            Operation::AwaitKeyPress { x } => {
+                self.pc -= match self.key_held {
+                    Some(key) => {
+                        self.v[x as usize] = key;
+                        0
+                    }
+                    None => 2,
+                }
             }
 
             // Sets the delay timer to the value in VX.
