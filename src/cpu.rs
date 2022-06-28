@@ -2,8 +2,8 @@ use crate::{operation::Operation, SCREEN_HEIGHT, SCREEN_WIDTH};
 use rand::random;
 
 // The memory should be 4 kB (4 kilobytes, ie. 4096 bytes) large.
-const RAM_SIZE: u16 = 0x1000;
-const VRAM_SIZE: u16 = SCREEN_WIDTH as u16 * SCREEN_HEIGHT as u16;
+const RAM_SIZE: usize = 0x1000;
+const VRAM_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize;
 
 // Original interpreters had limited space on the stack; usually at least 16 two-byte entries.
 const STACK_SIZE: usize = 16;
@@ -25,17 +25,17 @@ pub struct Cpu {
     // flag register; many instructions will set it to either 1 or 0 based on some rule.
     v: [u8; 16],
 
-    vram: [u8; VRAM_SIZE as usize],
+    vram: [u8; VRAM_SIZE],
     vram_changed: bool,
 }
 
 impl Cpu {
     pub fn new(rom: Vec<u8>) -> Cpu {
-        if rom.len() > RAM_SIZE as usize {
+        if rom.len() > RAM_SIZE {
             panic!("ROM size cannot be larger than {} bytes", RAM_SIZE);
         }
 
-        let mut ram = [0x00; RAM_SIZE as usize];
+        let mut ram = [0x00; RAM_SIZE];
         let mut i = 0x200;
 
         for byte in rom {
@@ -49,7 +49,7 @@ impl Cpu {
             i: 0x00,
             stack: Vec::with_capacity(STACK_SIZE),
             v: [0x00; 16],
-            vram: [0x00; VRAM_SIZE as usize],
+            vram: [0x00; VRAM_SIZE],
             vram_changed: false,
         }
     }
