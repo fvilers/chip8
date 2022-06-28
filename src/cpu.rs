@@ -71,10 +71,10 @@ impl Cpu {
         match nibbles {
             (0x00, 0x00, 0x0E, 0x00) => Operation::ClearScreen,
             (0x01, _, _, _) => Operation::JumpTo {
-                address: instruction & 0x0FF,
+                address: instruction & 0x0FFF,
             },
             (0x02, _, _, _) => Operation::CallSubroutineAt {
-                address: instruction & 0x0FF,
+                address: instruction & 0x0FFF,
             },
             (0x00, 0x00, 0x0e, 0x0E) => Operation::ReturnFromSubroutine,
             (0x03, _, _, _) => Operation::SkipNextInstructionIfVXEquals {
@@ -132,10 +132,10 @@ impl Cpu {
                 y: nibbles.2,
             },
             (0x0A, _, _, _) => Operation::SetITo {
-                address: instruction & 0x0FF,
+                address: instruction & 0x0FFF,
             },
             (0x0B, _, _, _) => Operation::JumpToPlusV0 {
-                address: instruction & 0x0FF,
+                address: instruction & 0x0FFF,
             },
             (0x0C, _, _, _) => Operation::SetVXToVXAndRandomNumber {
                 x: nibbles.1,
@@ -166,7 +166,7 @@ impl Cpu {
 
             // Leave this arm as the last one as it could match any 0x00 opcode
             (0x00, _, _, _) => Operation::CallMachineCodeRoutineAt {
-                address: instruction & 0x0FF,
+                address: instruction & 0x0FFF,
             },
 
             _ => panic!("Unsupported instruction {:04x}", instruction),
