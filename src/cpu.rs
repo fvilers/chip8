@@ -5,6 +5,9 @@ use rand::random;
 const RAM_SIZE: u16 = 0x1000;
 const VRAM_SIZE: u16 = SCREEN_WIDTH as u16 * SCREEN_HEIGHT as u16;
 
+// Original interpreters had limited space on the stack; usually at least 16 two-byte entries.
+const STACK_SIZE: usize = 16;
+
 pub struct Cpu {
     // CHIP-8 has direct access to up to 4 kilobytes of RAM.
     ram: [u8; RAM_SIZE as usize],
@@ -44,7 +47,7 @@ impl Cpu {
             ram,
             pc: 0x200,
             i: 0x00,
-            stack: Vec::new(),
+            stack: Vec::with_capacity(STACK_SIZE),
             v: [0x00; 16],
             vram: [0x00; VRAM_SIZE as usize],
             vram_changed: false,
@@ -209,6 +212,10 @@ impl Cpu {
 
             // Calls the subroutine at memory location.
             Operation::CallSubroutineAt { address } => {
+                if self.stack.len() == STACK_SIZE {
+                    panic!("Stack size limit of {} reached.", STACK_SIZE);
+                }
+
                 self.stack.push(self.pc);
                 self.pc = address;
             }
