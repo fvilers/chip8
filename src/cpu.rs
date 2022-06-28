@@ -40,6 +40,8 @@ pub struct Cpu {
 
     // Flag set to `true` if the SUPER-CHIP behavior is enabled
     super_chip: bool,
+
+    key_held: Option<u8>,
 }
 
 impl Cpu {
@@ -583,6 +585,14 @@ impl Cpu {
         }
 
         self.vram_changed = false;
+    }
+
+    pub fn press_key(&mut self, value: u8) {
+        self.key_held = Option::Some(value);
+    }
+
+    pub fn release_key(&mut self) {
+        self.key_held = Option::None;
     }
 }
 

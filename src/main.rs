@@ -1,6 +1,7 @@
 mod cli;
 mod cpu;
 mod font;
+mod key_mapping;
 mod operation;
 
 use crate::cli::Cli;
@@ -76,6 +77,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
                 *control_flow = ControlFlow::Exit;
                 return;
+            }
+
+            for (vkc, key) in key_mapping::KEY_MAPPING {
+                if input.key_pressed(vkc) {
+                    cpu.press_key(key);
+                    break;
+                }
+
+                if input.key_released(vkc) {
+                    cpu.release_key();
+                    break;
+                }
             }
         }
     });
