@@ -1,4 +1,4 @@
-use crate::{operation::Operation, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::{font::FONT, operation::Operation, SCREEN_HEIGHT, SCREEN_WIDTH};
 use rand::random;
 
 // The first CHIP-8 interpreter (on the COSMAC VIP computer) was also located in RAM, from address 000 to 1FF. It would
@@ -11,6 +11,12 @@ const VRAM_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize;
 
 // Original interpreters had limited space on the stack; usually at least 16 two-byte entries.
 const STACK_SIZE: usize = 16;
+
+// We should store the font data in memory, because games will draw these characters like regular sprites: They set the
+// index register I to the character's memory location and then draw it. There's a special instruction for setting I to
+// a character's address, so we can choose where to put it. Anywhere in the first 512 bytes (000–1FF) is fine. For some
+// reason, it's become popular to put it at 050–09F, so you can follow that convention if you want.
+const FONT_ADDRESS: u16 = 0x050;
 
 pub struct Cpu {
     // CHIP-8 has direct access to up to 4 kilobytes of RAM.
@@ -42,7 +48,15 @@ impl Cpu {
         let mut ram = [0x00; RAM_SIZE];
         let mut i = ROM_ADDRESS as usize;
 
+        // Copy the ROM to the RAM
         for byte in rom {
+            ram[i] = byte;
+            i += 1;
+        }
+
+        // Copy the font to the RAM
+        i = FONT_ADDRESS as usize;
+        for byte in FONT {
             ram[i] = byte;
             i += 1;
         }

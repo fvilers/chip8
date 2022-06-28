@@ -1,5 +1,6 @@
 mod cli;
 mod cpu;
+mod font;
 mod operation;
 
 use crate::cli::Cli;
