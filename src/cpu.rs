@@ -380,37 +380,39 @@ impl Cpu {
             // Draw an N pixels tall sprite from the memory location that the I index register is holding to the screen,
             // at the horizontal X coordinate in VX and the Y coordinate in VY.
             Operation::DrawSpriteAt { x, y, height } => {
-                let mut y = self.v[y as usize] % SCREEN_HEIGHT;
+                // The starting position of the sprite will wrap. In other words, an X coordinate of 5 is the same as an
+                //  X of 68 (since the screen is 64 pixels wide)
+                let x = self.v[x as usize] % SCREEN_WIDTH;
+                let y = self.v[y as usize] % SCREEN_HEIGHT;
 
                 self.v[0x0F] = 0;
 
                 for row in 0..height {
-                    // The starting position of the sprite will wrap. In other words, an X coordinate of 5 is the same
-                    //  as an X of 68 (since the screen is 64 pixels wide)
-                    let mut x = self.v[x as usize] % SCREEN_WIDTH;
                     let address = self.i + row as u16;
                     let sprite_row = self.ram[address as usize];
+                    let coords_y = y + row;
 
-                    for bit in 0..8 {
-                        let pixel = (sprite_row >> (7 - bit)) & 1;
-                        let screen_position = (y as u16 * SCREEN_HEIGHT as u16) + x as u16;
+                    for col in 0..8 {
+                        let pixel = (sprite_row >> (7 - col)) & 1;
+                        let coords_x = x + col;
+                        let screen_position =
+                            coords_x as u16 + (coords_y as u16 * SCREEN_WIDTH as u16);
 
                         // If the current pixel in the sprite row is on and the pixel at coordinates X,Y on the screen
                         // is also on, turn off the pixel and set VF to 1. Or if the current pixel in the sprite row is
                         // on and the screen pixel is not, draw the pixel at the X and Y coordinates.
+                        // if pixel != 0 {
                         self.v[0x0f] |= pixel & self.vram[screen_position as usize];
                         self.vram[screen_position as usize] ^= pixel;
 
-                        if x == SCREEN_WIDTH - 1 {
+                        if coords_x == SCREEN_WIDTH - 1 {
                             break;
                         }
-                        x += 1;
                     }
 
-                    if y == SCREEN_HEIGHT - 1 {
+                    if coords_y == SCREEN_HEIGHT - 1 {
                         break;
                     }
-                    y += 1;
                 }
 
                 self.vram_changed = true;
