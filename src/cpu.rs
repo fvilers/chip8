@@ -1,6 +1,10 @@
 use crate::{operation::Operation, SCREEN_HEIGHT, SCREEN_WIDTH};
 use rand::random;
 
+// The first CHIP-8 interpreter (on the COSMAC VIP computer) was also located in RAM, from address 000 to 1FF. It would
+//  expect a CHIP-8 program to be loaded into memory after it, starting at address 200.
+const ROM_ADDRESS: u16 = 0x200;
+
 // The memory should be 4 kB (4 kilobytes, ie. 4096 bytes) large.
 const RAM_SIZE: usize = 0x1000;
 const VRAM_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize;
@@ -36,7 +40,7 @@ impl Cpu {
         }
 
         let mut ram = [0x00; RAM_SIZE];
-        let mut i = 0x200;
+        let mut i = ROM_ADDRESS as usize;
 
         for byte in rom {
             ram[i] = byte;
@@ -45,7 +49,7 @@ impl Cpu {
 
         Cpu {
             ram,
-            pc: 0x200,
+            pc: ROM_ADDRESS,
             i: 0x00,
             stack: Vec::with_capacity(STACK_SIZE),
             v: [0x00; 16],
