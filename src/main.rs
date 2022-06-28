@@ -20,19 +20,20 @@ pub const SCREEN_HEIGHT: u8 = 32;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
-    let mut file = File::open(args.rom_path)?;
+    let mut file = File::open(&args.rom_path)?;
     let mut rom = Vec::new();
 
     file.read_to_end(&mut rom)?;
 
     let mut cpu = Cpu::new(rom);
+    let file_name = args.rom_path.file_name().unwrap().to_str().unwrap();
 
     let event_loop = EventLoop::new();
     let window = {
         let size = LogicalSize::new(SCREEN_WIDTH, SCREEN_HEIGHT);
 
         WindowBuilder::new()
-            .with_title("CHIP-8")
+            .with_title([&file_name, "CHIP-8"].join(" - "))
             .with_min_inner_size(size)
             .build(&event_loop)
             .unwrap()
