@@ -18,7 +18,9 @@
     "CXNN",
     "DXYN",
     "Spacefight",
+    "utilapiset",
     "vram",
+    "winapi",
     "winit"
   ]
 }

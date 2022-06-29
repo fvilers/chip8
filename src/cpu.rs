@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use crate::{font::FONT, operation::Operation, SCREEN_HEIGHT, SCREEN_WIDTH};
 use rand::random;
 
@@ -11,6 +13,10 @@ const VRAM_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize;
 
 // Original interpreters had limited space on the stack; usually at least 16 two-byte entries.
 const STACK_SIZE: usize = 16;
+
+// Timers should be decremented by one 60 times per second (ie. at 60 Hz). This is independent of the speed of the
+// fetch/decode/execute loop.
+const TIMER_FREQUENCY: Duration = Duration::from_micros(1000000 / 60); // 60 times per second
 
 // We should store the font data in memory, because games will draw these characters like regular sprites: They set the
 // index register I to the character's memory location and then draw it. There's a special instruction for setting I to
@@ -34,6 +40,10 @@ pub struct Cpu {
     // An 8-bit delay timer which is decremented at a rate of 60 Hz (60 times per second) until it reaches 0
     delay_timer: u8,
 
+    // An 8-bit sound timer which functions like the delay timer, but which also gives off a beeping sound as long as
+    // it’s not 0
+    sound_timer: u8,
+
     // 16 8-bit (one byte) general-purpose variable registers numbered 0 through F hexadecimal. VF is also used as a
     // flag register; many instructions will set it to either 1 or 0 based on some rule.
     v: [u8; 16],
@@ -44,6 +54,7 @@ pub struct Cpu {
     // Flag set to `true` if the SUPER-CHIP behavior is enabled
     super_chip: bool,
 
+    last_tick: Instant,
     key_held: Option<u8>,
 }
 
@@ -75,10 +86,12 @@ impl Cpu {
             i: 0x00,
             stack: Vec::with_capacity(STACK_SIZE),
             delay_timer: 0x00,
+            sound_timer: 0x00,
             v: [0x00; 16],
             vram: [0x00; VRAM_SIZE],
             vram_changed: false,
             super_chip,
+            last_tick: Instant::now(),
             key_held: Option::None,
         }
     }
@@ -491,9 +504,8 @@ impl Cpu {
             }
 
             // Sets the sound timer to the value in VX.
-            Operation::SetSoundTimerToVX { x: _ } => {
-                // TODO:
-                unimplemented!()
+            Operation::SetSoundTimerToVX { x } => {
+                self.sound_timer = self.v[x as usize];
             }
 
             // The index register I will get the value in VX added to it.
@@ -511,7 +523,7 @@ impl Cpu {
             // two hexadecimal numbers, but this would only point to one character. The original COSMAC VIP
             // interpreter just took the last nibble of VX and used that as the character.
             Operation::SetIToSpriteLocationForCharacterInVX { x } => {
-                let offset = self.v[x as usize] * 5;
+                let offset = self.v[x as usize] as u16 * 5;
                 self.i = FONT_ADDRESS + offset as u16;
             }
 
@@ -569,7 +581,7 @@ impl Cpu {
     }
 
     // An emulator's main task is simple. It runs in an infinite loop, and does these three tasks in succession.
-    pub fn tick(&mut self) -> bool {
+    pub fn tick(&mut self) -> (bool, bool) {
         // Fetch the instruction from memory at the current PC.
         let instruction = self.fetch();
 
@@ -579,13 +591,25 @@ impl Cpu {
         // Execute the instruction and do what it tells you.
         self.execute(operation);
 
-        // Handle timers
-        if self.delay_timer > 0 {
-            self.delay_timer -= 1;
+        // Decrement timers only if enough time has passed
+        let mut should_beep = false;
+
+        if self.last_tick.elapsed().gt(&TIMER_FREQUENCY) {
+            if self.delay_timer > 0 {
+                self.delay_timer -= 1;
+            }
+
+            if self.sound_timer > 0 {
+                should_beep = true;
+                self.sound_timer -= 1;
+            }
+
+            // Tick
+            self.last_tick = Instant::now();
         }
 
-        // Let the CPU consumer know if VRAM has changed.
-        self.vram_changed
+        // Let the CPU consumer know if VRAM has changed and if it needs to beep
+        (self.vram_changed, should_beep)
     }
 
     pub fn draw(&mut self, screen: &mut [u8]) {

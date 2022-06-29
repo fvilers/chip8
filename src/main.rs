@@ -31,7 +31,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut cpu = Cpu::new(rom, args.super_chip);
     let file_name = args.rom_path.file_name().unwrap().to_str().unwrap();
-
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = {
@@ -67,8 +66,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 window_id,
             } if window_id == window.id() => *control_flow = ControlFlow::Exit,
             _ => {
-                if cpu.tick() {
+                let (should_redraw, should_beep) = cpu.tick();
+
+                if should_redraw {
                     window.request_redraw();
+                }
+
+                if should_beep {
+                    beep(440, 10);
                 }
             }
         }
@@ -92,4 +97,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
+}
+
+#[cfg(windows)]
+fn beep(frequency: u32, duration: u32) {
+    use winapi::um::utilapiset;
+
+    unsafe {
+        utilapiset::Beep(frequency, duration);
+    }
+}
+#[cfg(not(windows))]
+fn beep(frequency: u32, duration: u32) {
+    // TODO: implement beep for other platforms
+    println!("beep() is not supported")
 }
