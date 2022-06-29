@@ -1,3 +1,5 @@
+use crate::nibble::Nibble;
+
 pub enum Operation {
     // 0NNN
     CallMachineCodeRoutineAt { address: u16 },
@@ -121,7 +123,7 @@ impl Operation {
         // - N: The fourth nibble. A 4-bit number.
         // - NN: The second byte (third and fourth nibbles). An 8-bit immediate number.
         // - NNN: The second, third and fourth nibbles. A 12-bit immediate memory address.
-        let nibbles = get_nibbles(&instruction);
+        let nibbles = &instruction.get_nibbles();
 
         match nibbles {
             (0x00, 0x00, 0x0E, 0x00) => Operation::ClearScreen,
@@ -239,14 +241,4 @@ impl Operation {
             _ => panic!("Unsupported instruction {:04x}", instruction),
         }
     }
-}
-
-// TODO: use a Nibbles new type that doesn't allocates memory, but instead gives a "view" into the nibbles of a slice.
-fn get_nibbles(value: &u16) -> (u8, u8, u8, u8) {
-    (
-        ((value & 0xF000) >> 0xC) as u8,
-        ((value & 0x0F00) >> 0x8) as u8,
-        ((value & 0x00F0) >> 0x4) as u8,
-        (value & 0x000F) as u8,
-    )
 }

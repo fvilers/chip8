@@ -2,6 +2,7 @@ mod cli;
 mod cpu;
 mod font;
 mod key_mapping;
+mod nibble;
 mod operation;
 
 use crate::cli::Cli;
