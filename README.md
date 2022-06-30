@@ -25,7 +25,7 @@ OPTIONS:
 
 ## State of the project
 
-The program is "opcode complete" and runs correctly even though some improvement remain to be done (see [issues](https://github.com/fvilers/chip8/issues)).
+The program is "opcode complete" and runs correctly even though some improvements remain to be done (see [issues](https://github.com/fvilers/chip8/issues)).
 
 ## Screenshots
 
