@@ -483,15 +483,14 @@ impl Cpu {
 
     pub fn draw(&mut self, screen: &mut [u8]) {
         for (p, pixel) in self.vram.iter().zip(screen.chunks_exact_mut(4)) {
-            let color = match p {
+            pixel[0] = 0xFF; // Red
+            pixel[1] = 0xFF; // Green
+            pixel[2] = 0xFF; // Blue
+            pixel[3] = match p {
                 0 => 0x00,
                 1 => 0xFF,
-                _ => panic!("Invalid pixel value"),
-            };
-            pixel[0] = color; // Red
-            pixel[1] = color; // Green
-            pixel[2] = color; // Blue
-            pixel[3] = 0xFF; // Alpha channel
+                _ => panic!("Invalid VRAM value ({})", p),
+            }; // Alpha channel
         }
 
         self.vram_changed = false;
